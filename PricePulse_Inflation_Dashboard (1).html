@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PRICEPULSE — India Inflation Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+  // Fallback in case the primary CDN is blocked/unreachable
+  if (typeof Chart === 'undefined') {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"><\/script>');
+  }
+</script>
+<style>
+  :root{
+    --deep:#3B1F5C;
+    --deep2:#5C3A8A;
+    --purple:#6A3FA0;
+    --purple-light:#8E6BC0;
+    --lav:#B79CDA;
+    --lav-pale:#EDE6F7;
+    --panel:#FFFFFF;
+    --bg:#F1EBFA;
+    --text:#2E1F45;
+    --muted:#7A6A93;
+    --rose:#C15B7A;
+    --gold:#D9A441;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:'Segoe UI',Arial,sans-serif;
+    color:var(--text);
+    padding:18px;
+  }
+  .board{max-width:1400px;margin:0 auto;}
+
+  /* HEADER */
+  .header{
+    background:linear-gradient(90deg,var(--deep) 0%,var(--purple) 55%,var(--deep2) 100%);
+    border-radius:10px;
+    padding:16px 28px;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    box-shadow:0 4px 14px rgba(59,31,92,.25);
+    margin-bottom:16px;
+  }
+  .header svg{flex-shrink:0;}
+  .header h1{
+    color:#fff;
+    margin:0;
+    font-size:26px;
+    letter-spacing:.06em;
+    font-weight:700;
+  }
+  .header .tag{
+    color:#D9C6F0;
+    font-size:12px;
+    letter-spacing:.12em;
+    margin-top:2px;
+    text-transform:uppercase;
+  }
+
+  /* GRID */
+  .grid{
+    display:grid;
+    grid-template-columns:200px 1fr 1fr;
+    gap:16px;
+    align-items:start;
+  }
+  @media(max-width:1100px){
+    .grid{grid-template-columns:1fr;}
+  }
+
+  .panel{
+    background:var(--panel);
+    border-radius:10px;
+    box-shadow:0 2px 10px rgba(59,31,92,.10);
+    padding:16px;
+  }
+  .panel h3{
+    margin:0 0 12px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--deep);
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+
+  /* LEFT FILTER PANELS */
+  .filters{display:flex;flex-direction:column;gap:16px;}
+  .filter-panel .filter-title{
+    background:linear-gradient(90deg,var(--deep2),var(--purple));
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.04em;
+    padding:8px 12px;
+    border-radius:6px 6px 0 0;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .filter-list{
+    background:var(--lav-pale);
+    border-radius:0 0 6px 6px;
+    padding:6px;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .filter-item{
+    background:linear-gradient(90deg,var(--purple-light),var(--lav));
+    color:#fff;
+    font-size:12.5px;
+    font-weight:600;
+    padding:8px 10px;
+    border-radius:5px;
+    cursor:pointer;
+    transition:transform .12s ease, filter .12s ease;
+    user-select:none;
+    border:2px solid transparent;
+  }
+  .filter-item:hover{transform:translateX(2px);filter:brightness(1.06);}
+  .filter-item.active{
+    background:linear-gradient(90deg,var(--deep),var(--deep2));
+    border-color:var(--gold);
+  }
+
+  /* KPI CARDS */
+  .kpi-row{display:flex;gap:16px;margin-bottom:16px;}
+  .kpi-card{
+    flex:1;
+    background:var(--panel);
+    border-radius:10px;
+    box-shadow:0 2px 10px rgba(59,31,92,.10);
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .kpi-icon{
+    width:46px;height:46px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .kpi-icon.wpi{background:linear-gradient(135deg,var(--purple),var(--deep));}
+  .kpi-icon.cpi{background:linear-gradient(135deg,var(--rose),#8E3E5B);}
+  .kpi-label{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
+  .kpi-value{font-size:24px;font-weight:800;color:var(--deep);line-height:1.2;}
+  .kpi-value.down{color:var(--purple);}
+  .kpi-value.up{color:var(--rose);}
+  .kpi-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  .chart-wrap{position:relative;width:100%;}
+  canvas{max-width:100%;}
+
+  .col{display:flex;flex-direction:column;gap:16px;}
+
+  .footnote{
+    margin-top:16px;
+    background:var(--panel);
+    border-left:4px solid var(--gold);
+    border-radius:6px;
+    padding:12px 16px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .footnote b{color:var(--deep);}
+
+  .sub-badge{
+    font-size:10.5px;
+    font-weight:700;
+    text-transform:none;
+    letter-spacing:0;
+    color:#fff;
+    background:var(--purple);
+    padding:2px 8px;
+    border-radius:20px;
+    vertical-align:middle;
+    margin-left:4px;
+  }
+  .panel{transition:opacity .2s ease;}
+  .panel.dimmed{opacity:.38;}
+  .panel h3{transition:none;}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="header">
+    <svg width="42" height="42" viewBox="0 0 42 42" fill="none">
+      <rect width="42" height="42" rx="10" fill="rgba(255,255,255,0.15)"/>
+      <path d="M21 8c-3 5-7 8-7 13a7 7 0 0 0 14 0c0-5-4-8-7-13z" fill="#fff"/>
+    </svg>
+    <div>
+      <h1>PRICEPULSE</h1>
+      <div class="tag">India WPI &amp; CPI Tracker · Apr–Dec 2022</div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- LEFT: FILTERS -->
+    <div class="filters">
+      <div class="filter-panel">
+        <div class="filter-title">Index Type <span>⌄</span></div>
+        <div class="filter-list" id="filter-index">
+          <div class="filter-item active" data-val="all">All Indices</div>
+          <div class="filter-item" data-val="WPI">WPI (Wholesale)</div>
+          <div class="filter-item" data-val="CPI">CPI (Consumer)</div>
+        </div>
+      </div>
+
+      <div class="filter-panel">
+        <div class="filter-title">Category <span>⌄</span></div>
+        <div class="filter-list" id="filter-category">
+          <div class="filter-item active" data-val="all">All Categories</div>
+          <div class="filter-item" data-val="Foodgrains">Foodgrains</div>
+          <div class="filter-item" data-val="Fuel & Power">Fuel &amp; Power</div>
+          <div class="filter-item" data-val="Primary Articles">Primary Articles</div>
+          <div class="filter-item" data-val="Manufactured Products">Manufactured Products</div>
+          <div class="filter-item" data-val="Manufactured Food">Manufactured Food</div>
+        </div>
+      </div>
+
+      <div class="filter-panel">
+        <div class="filter-title">CPI Region <span>⌄</span></div>
+        <div class="filter-list" id="filter-region">
+          <div class="filter-item active" data-val="all">All Regions</div>
+          <div class="filter-item" data-val="Rural">Rural</div>
+          <div class="filter-item" data-val="Urban">Urban</div>
+          <div class="filter-item" data-val="Combined">Combined</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDDLE COLUMN -->
+    <div class="col">
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-icon wpi">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 9V6a6 6 0 1 1 12 0v3M4 9h16l-1.2 11.2A2 2 0 0 1 16.8 22H7.2a2 2 0 0 1-2-1.8L4 9z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="kpi-label">WPI · All Commodities</div>
+            <div class="kpi-value down">−1.3%</div>
+            <div class="kpi-sub">Index 152 → 150</div>
+          </div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon cpi">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="kpi-label">CPI · Combined</div>
+            <div class="kpi-value up">+3.5%</div>
+            <div class="kpi-sub">Index 170 → 176</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-category">
+        <h3>WPI Change by Category (Apr → Dec 2022)</h3>
+        <div class="chart-wrap"><canvas id="chartCategory" height="230"></canvas></div>
+      </div>
+
+      <div class="panel" id="panel-top10">
+        <h3>Top 10 Movers — Commodities (% change)</h3>
+        <div class="chart-wrap"><canvas id="chartTop10" height="260"></canvas></div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col">
+      <div class="panel" id="panel-trend">
+        <h3>Monthly Trend <span id="trend-sub" class="sub-badge"></span></h3>
+        <div class="chart-wrap"><canvas id="chartTrend" height="200"></canvas></div>
+      </div>
+
+      <div class="panel" id="panel-compare">
+        <h3>WPI vs CPI — Overall % Change <span id="compare-sub" class="sub-badge"></span></h3>
+        <div class="chart-wrap"><canvas id="chartCompare" height="170"></canvas></div>
+      </div>
+
+      <div class="panel" id="panel-region">
+        <h3>CPI by Region</h3>
+        <div class="chart-wrap"><canvas id="chartRegion" height="170"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footnote">
+    <b>Data quality note:</b> figures are drawn from the <b>WPI_Monthly</b> and <b>CPI_Monthly</b> sheets (Apr–Dec 2022). The <b>HFI_Monthly</b> sheet carries a Data_Quality_Flag on several months and was excluded from this view.
+  </div>
+
+</div>
+
+<script>
+Chart.defaults.font.family = "'Segoe UI', Arial, sans-serif";
+Chart.defaults.color = '#7A6A93';
+
+const purple  = '#6A3FA0';
+const purpleL = '#8E6BC0';
+const lav     = '#B79CDA';
+const deep    = '#3B1F5C';
+const rose    = '#C15B7A';
+const gold    = '#D9A441';
+const dim     = '#D8CFEA';
+
+function barGrad(ctx, c1, c2){
+  const g = ctx.createLinearGradient(0,0,0,260);
+  g.addColorStop(0, c1);
+  g.addColorStop(1, c2);
+  return g;
+}
+function pct(a,b){ return Math.round(((b-a)/a)*1000)/10; }
+
+/* ============ REAL DATA (WPI_Monthly / CPI_Monthly, Apr–Dec 2022) ============ */
+const months = ['Apr-22','May-22','Jun-22','Jul-22','Aug-22','Sep-22','Oct-22','Nov-22','Dec-22'];
+
+const wpiCategorySeries = {
+  'All Commodities':        [152,155,155,154,153,152,153,152,150],
+  'Foodgrains':              [171,172,171,173,177,178,180,182,184],
+  'Fuel & Power':            [151,164,167,167,159,158,158,160,158],
+  'Primary Articles':        [175,179,182,177,178,176,181,178,172],
+  'Manufactured Products':   [145,145,144,143,143,142,142,142,141],
+  'Manufactured Food':       [170,171,169,166,167,163,164,165,163]
+};
+
+const cpiRegionSeries = {
+  'Rural':    [171,173,174,174,175,176,178,178,177],
+  'Urban':    [169,171,171,172,173,174,175,175,174],
+  'Combined': [170,172,173,173,174,175,177,177,176]
+};
+
+const categoryLabels = ['Foodgrains','Fuel & Power','Primary Articles','Manufactured Products','Manufactured Food'];
+const categoryChange = {};
+categoryLabels.forEach(c=>{ const s=wpiCategorySeries[c]; categoryChange[c]=pct(s[0], s[s.length-1]); });
+
+const regionLabels = ['Rural','Urban','Combined'];
+const regionChange = {};
+regionLabels.forEach(r=>{ const s=cpiRegionSeries[r]; regionChange[r]=pct(s[0], s[s.length-1]); });
+
+const topLabels = ['Wheat','Fertilizers & Nitrogenous','Groundnut Seed','Paddy','Cotton Cloth','Cement, Lime & Plaster','Sugar, Molasses & Honey','Coal','Pulses','Tea'];
+const topValues = [14.5,7.2,6.4,6.1,5.4,3.8,2.4,2.3,1.7,0.0];
+
+/* ============ STATE ============ */
+const state = { index:'all', category:'all', region:'all' };
+
+/* ============ CHARTS ============ */
+const catCtx = document.getElementById('chartCategory').getContext('2d');
+const categoryChart = new Chart(catCtx, {
+  type:'bar',
+  data:{
+    labels: categoryLabels,
+    datasets:[{
+      label:'% change Apr→Dec 2022',
+      data: categoryLabels.map(c=>categoryChange[c]),
+      backgroundColor: categoryLabels.map(c=>categoryChange[c] >= 0 ? gold : purple),
+      borderRadius:5,
+      barThickness:34
+    }]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y+'%'}}},
+    scales:{
+      y:{grid:{color:'#EDE6F7'}, ticks:{callback:v=>v+'%'}},
+      x:{grid:{display:false}}
+    }
+  }
+});
+
+const topCtx = document.getElementById('chartTop10').getContext('2d');
+const top10Chart = new Chart(topCtx, {
+  type:'bar',
+  data:{
+    labels: topLabels,
+    datasets:[{
+      data: topValues,
+      backgroundColor: barGrad(topCtx, purpleL, deep),
+      borderRadius:4,
+      barThickness:16
+    }]
+  },
+  options:{
+    indexAxis:'y',
+    responsive:true,
+    plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.x+'%'}}},
+    scales:{
+      x:{grid:{color:'#EDE6F7'}, ticks:{callback:v=>v+'%'}},
+      y:{grid:{display:false}, ticks:{font:{size:11}}}
+    }
+  }
+});
+
+const trendCtx = document.getElementById('chartTrend').getContext('2d');
+const trendChart = new Chart(trendCtx, {
+  type:'line',
+  data:{
+    labels: months,
+    datasets:[
+      {
+        label:'WPI — All Commodities',
+        data: wpiCategorySeries['All Commodities'],
+        borderColor: purple,
+        backgroundColor:'rgba(106,63,160,0.12)',
+        fill:true, tension:.35, pointRadius:3, pointBackgroundColor:purple
+      },
+      {
+        label:'CPI — Combined',
+        data: cpiRegionSeries['Combined'],
+        borderColor: rose,
+        backgroundColor:'rgba(193,91,122,0.10)',
+        fill:true, tension:.35, pointRadius:3, pointBackgroundColor:rose
+      }
+    ]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{position:'bottom', labels:{boxWidth:12, padding:14, font:{size:11}}}},
+    scales:{
+      y:{grid:{color:'#EDE6F7'}},
+      x:{grid:{display:false}, ticks:{font:{size:10}}}
+    }
+  }
+});
+
+const cmpCtx = document.getElementById('chartCompare').getContext('2d');
+const compareChart = new Chart(cmpCtx, {
+  type:'bar',
+  data:{
+    labels:['WPI (Wholesale)','CPI (Consumer)'],
+    datasets:[{
+      data:[categoryChange['All Commodities'] ?? -1.3, regionChange['Combined']],
+      backgroundColor:[purple, rose],
+      borderRadius:6,
+      barThickness:46
+    }]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y+'%'}}},
+    scales:{
+      y:{grid:{color:'#EDE6F7'}, ticks:{callback:v=>v+'%'}},
+      x:{grid:{display:false}}
+    }
+  }
+});
+
+const regCtx = document.getElementById('chartRegion').getContext('2d');
+const regionChart = new Chart(regCtx, {
+  type:'bar',
+  data:{
+    labels: regionLabels,
+    datasets:[{
+      data: regionLabels.map(r=>regionChange[r]),
+      backgroundColor:[lav, purpleL, deep],
+      borderRadius:6,
+      barThickness:38
+    }]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>ctx.parsed.y+'%'}}},
+    scales:{
+      y:{grid:{color:'#EDE6F7'}, ticks:{callback:v=>v+'%'}},
+      x:{grid:{display:false}}
+    }
+  }
+});
+
+/* ============ RENDER ON STATE CHANGE ============ */
+function render(){
+  const catSel = state.category === 'all' ? null : state.category;
+  const regSel = state.region === 'all' ? null : state.region;
+
+  /* -- Category bar chart: highlight selection -- */
+  categoryChart.data.datasets[0].backgroundColor = categoryLabels.map(c=>{
+    const base = categoryChange[c] >= 0 ? gold : purple;
+    return (!catSel || c === catSel) ? base : dim;
+  });
+  categoryChart.update();
+
+  /* -- Region bar chart: highlight selection -- */
+  const regionBase = [lav, purpleL, deep];
+  regionChart.data.datasets[0].backgroundColor = regionLabels.map((r,i)=> (!regSel || r === regSel) ? regionBase[i] : dim);
+  regionChart.update();
+
+  /* -- Trend chart: swap series based on category / region, hide by index type -- */
+  const wpiKey = catSel || 'All Commodities';
+  const regKey = regSel || 'Combined';
+  trendChart.data.datasets[0].data = wpiCategorySeries[wpiKey];
+  trendChart.data.datasets[0].label = 'WPI — ' + wpiKey;
+  trendChart.data.datasets[1].data = cpiRegionSeries[regKey];
+  trendChart.data.datasets[1].label = 'CPI — ' + regKey;
+  trendChart.data.datasets[0].hidden = (state.index === 'CPI');
+  trendChart.data.datasets[1].hidden = (state.index === 'WPI');
+  trendChart.update();
+
+  /* -- Compare chart: reflect selected category / region, dim by index type -- */
+  const wpiVal = categoryChange[wpiKey] !== undefined ? categoryChange[wpiKey] : -1.3;
+  const cpiVal = regionChange[regKey];
+  compareChart.data.labels = ['WPI — ' + wpiKey, 'CPI — ' + regKey];
+  compareChart.data.datasets[0].data = [wpiVal, cpiVal];
+  compareChart.data.datasets[0].backgroundColor = [
+    state.index === 'CPI' ? dim : purple,
+    state.index === 'WPI' ? dim : rose
+  ];
+  compareChart.update();
+
+  /* -- Panel-level relevance dimming -- */
+  const panelCategory = document.getElementById('panel-category');
+  const panelTop10    = document.getElementById('panel-top10');
+  const panelRegion   = document.getElementById('panel-region');
+  panelCategory.classList.toggle('dimmed', state.index === 'CPI');
+  panelTop10.classList.toggle('dimmed', state.index === 'CPI');
+  panelRegion.classList.toggle('dimmed', state.index === 'WPI');
+
+  /* -- Badges -- */
+  document.getElementById('trend-sub').textContent =
+    (catSel || regSel || state.index !== 'all') ? 'Filtered' : '';
+  document.getElementById('compare-sub').textContent =
+    (catSel || regSel) ? 'Filtered' : '';
+}
+render();
+
+/* ============ FILTER WIRING ============ */
+function wireFilterGroup(id, stateKey){
+  document.querySelectorAll('#'+id+' .filter-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      document.querySelectorAll('#'+id+' .filter-item').forEach(i=>i.classList.remove('active'));
+      item.classList.add('active');
+      state[stateKey] = item.getAttribute('data-val');
+      render();
+    });
+  });
+}
+wireFilterGroup('filter-index', 'index');
+wireFilterGroup('filter-category', 'category');
+wireFilterGroup('filter-region', 'region');
+</script>
+</body>
+</html>
